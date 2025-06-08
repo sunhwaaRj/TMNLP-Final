@@ -10,9 +10,6 @@ Original file is located at
 import streamlit as st
 import numpy as np
 import pandas as pd
-import os
-import regex as re
-import nltk
 import ast
 
 import gensim as gs
