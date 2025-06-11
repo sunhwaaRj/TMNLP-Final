@@ -30,7 +30,7 @@ st.set_page_config(
 )
 
 # 페이지 제목 설정
-st.title("LDA 토픽 모델링 시각화")
+st.title("TMNLP 경제 기사 분석")
 
 # 사이드바 제목
 st.sidebar.header("")
@@ -180,7 +180,7 @@ if st.button("분석 실행"):
                     with st.spinner("pyLDAvis 시각화 준비 중..."):
                         vis = gensimvis.prepare(lda_model[1], corpus, dictionary) # lda_model 튜플의 두 번째 요소가 모델
                         st.success("pyLDAvis 시각화")
-                    pyLDAvis.display(vis) # pyLDAvis 시각화 결과를 Streamlit 앱에 표시
+		    pyldavis_html = pyLDAvis.prepared_data_to_html(vis)    		    st.components.v1.html(pyldavis_html, width=None, height=800, scrolling=True) 
 
                 except Exception as e:
                     st.error(f"오류: pyLDAvis 시각화 중 오류 발생: {e}")
