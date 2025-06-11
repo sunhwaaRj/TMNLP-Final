@@ -146,7 +146,7 @@ def train_lda_model(corpus, dictionary, filtered_df):
 
 
 # --- UI 요소 ---
-st.header("분석 기간 설정") # 사이드바 -> 메인 화면
+st.header("분석 기간 설정 (2025년 2월~4월 분석만 가능합니다.)") # 사이드바 -> 메인 화면
 col1, col2 = st.columns(2) # 두 개의 컬럼으로 나누기
 
 with col1:
