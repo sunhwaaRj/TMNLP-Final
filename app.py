@@ -33,7 +33,7 @@ st.set_page_config(
 st.title("LDA 토픽 모델링 시각화")
 
 # 사이드바 제목
-st.sidebar.header("분석 설정")
+st.sidebar.header("")
 
 # --- 함수 정의 ---
 @st.cache_data
@@ -65,16 +65,13 @@ def load_and_filter_data(file_path, start_date, end_date):
 # 단어 사전 및 BoW 코퍼스 생성 함수
 @st.cache_data
 def create_dictionary_and_corpus(filtered_df):
-    """필터링된 데이터로부터 단어 사전과 BoW 코퍼스를 생성합니다."""
     try:
         with st.spinner("단어 사전 및 BoW 코퍼스 생성 중..."):
             # 단어 사전 생성
             dictionary = corpora.Dictionary(filtered_df['tokens'])
-            st.write(f"단어 사전 생성 완료. (단어 수: {len(dictionary)})")
 
             # BoW 코퍼스 생성
             corpus = [dictionary.doc2bow(tokens) for tokens in filtered_df['tokens']]
-            st.write("BoW 코퍼스 생성 완료.")
 
         return dictionary, corpus
 
@@ -87,7 +84,6 @@ def train_lda_model(corpus, dictionary, filtered_df):
     topic_range = range(2, 10)  # 토픽 개수 범위를 2~9로 고정
     try:
         with st.spinner("최적 토픽 개수 탐색 및 LDA 모델 학습 중..."):
-            st.write(f"응집도 계산을 시작합니다. (토픽 수 범위: {min(topic_range)} ~ {max(topic_range)-1})")
             coherence_scores = []
             num_topics_list = list(topic_range) # 리스트로 변환하여 인덱스 접근 가능하도록 함
 
@@ -97,8 +93,6 @@ def train_lda_model(corpus, dictionary, filtered_df):
             status_text = st.empty() # 상태 메시지를 표시할 빈 공간 확보
 
             for i, num_topics in enumerate(num_topics_list):
-                status_text.text(f"토픽 수 {num_topics}개로 LDA 모델 학습 및 응집도 계산 중...") # 상태 메시지 업데이트
-
                 # LDA 모델 학습
                 lda_model = gs.models.ldamodel.LdaModel(
                     corpus=corpus,
@@ -135,7 +129,6 @@ def train_lda_model(corpus, dictionary, filtered_df):
                 return None, None
 
             # 최종 LDA 모델 학습 (최적 토픽 개수로)
-            st.write(f"최적 토픽 개수 ({best_topic_num})로 최종 LDA 모델 학습 중...")
             final_lda_model = gs.models.ldamodel.LdaModel(
                 corpus=corpus,
                 id2word=dictionary,
@@ -143,7 +136,6 @@ def train_lda_model(corpus, dictionary, filtered_df):
                 passes=15, # passes 값 조정 가능
                 random_state=42
             )
-            st.write("최종 LDA 모델 학습 완료.")
             return best_topic_num, final_lda_model # 학습된 최종 모델 반환
 
     except Exception as e:
@@ -173,15 +165,10 @@ if st.button("분석 실행"):
     filtered_df = load_and_filter_data(file_path, start_date, end_date)
 
     if filtered_df is not None:
-        st.write("데이터 필터링 완료!")
-        st.write(filtered_df.head())
-
         # 단어 사전 및 BoW 코퍼스 생성
         dictionary, corpus = create_dictionary_and_corpus(filtered_df)
 
         if dictionary is not None and corpus is not None:
-            st.write("단어 사전 및 BoW 코퍼스 생성 완료!")
-
             # LDA 모델 학습 및 최적 토픽 수 결정
             lda_model = train_lda_model(corpus, dictionary, filtered_df)
 
@@ -192,7 +179,7 @@ if st.button("분석 실행"):
                 try:
                     with st.spinner("pyLDAvis 시각화 준비 중..."):
                         vis = gensimvis.prepare(lda_model[1], corpus, dictionary) # lda_model 튜플의 두 번째 요소가 모델
-                        st.success("pyLDAvis 시각화 준비 완료!")
+                        st.success("pyLDAvis 시각화")
                     pyLDAvis.display(vis) # pyLDAvis 시각화 결과를 Streamlit 앱에 표시
 
                 except Exception as e:

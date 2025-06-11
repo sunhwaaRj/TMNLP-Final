@@ -5,3 +5,4 @@ pandas
 gensim
 pyLDAvis
 konlpy
+IPython
