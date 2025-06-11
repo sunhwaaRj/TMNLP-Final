@@ -180,7 +180,8 @@ if st.button("분석 실행"):
                     with st.spinner("pyLDAvis 시각화 준비 중..."):
                         vis = gensimvis.prepare(lda_model[1], corpus, dictionary) # lda_model 튜플의 두 번째 요소가 모델
                         st.success("pyLDAvis 시각화")
-		    pyldavis_html = pyLDAvis.prepared_data_to_html(vis)    		    					    st.components.v1.html(pyldavis_html, width=None, height=800, scrolling=True) 
+		    pyldavis_html = pyLDAvis.prepared_data_to_html(vis) 
+		    st.components.v1.html(pyldavis_html, width=None, height=800, scrolling=True) 
 
                 except Exception as e:
                     st.error(f"오류: pyLDAvis 시각화 중 오류 발생: {e}")
