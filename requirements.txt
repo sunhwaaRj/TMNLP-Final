@@ -7,3 +7,4 @@ pyLDAvis
 konlpy
 IPython
 matplotlib
+wordcloud
