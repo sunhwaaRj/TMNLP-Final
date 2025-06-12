@@ -21,6 +21,9 @@ from datetime import datetime
 import pyLDAvis
 import pyLDAvis.gensim_models as gensimvis
 
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+
 # Streamlit 페이지 기본 설정
 st.set_page_config(
     page_title="LDA 토픽 모델링 시각화",
@@ -143,6 +146,41 @@ def train_lda_model(corpus, dictionary, filtered_df):
         st.error(e) # 상세 오류 메시지 표시
         return None, None
 
+def generate_wordcloud(filtered_df, start_date, end_date):
+    if not filtered_df.empty and 'tokens' in filtered_df.columns:
+        with st.spinner("워드클라우드 생성 중..."):
+            try:
+                all_tokens = [token for tokens_list in filtered_df['tokens'].dropna().tolist() for token in tokens_list]
+
+                text_for_wordcloud = ' '.join(all_tokens)
+                font_path = './NanumBarunGothic.ttf'
+
+                wordcloud = WordCloud(
+                    font_path=font_path,
+                    width=800, height=400, 
+                    background_color='white', 
+                    max_words=100, 
+                    colormap='viridis'
+                )
+
+                wordcloud.generate(text_for_wordcloud)
+
+                st.success("워드클라우드 생성 완료!")
+
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.imshow(wordcloud, interpolation='bilinear')
+                ax.axis('off')
+                ax.set_title(f"'{start_date.strftime('%Y.%m.%d')}' ~ '{end_date.strftime('%Y.%m.%d')}' 기간 워드클라우드", fontsize=14) # 날짜 변수 사용
+                st.pyplot(fig)
+                plt.close(fig)
+
+            except Exception as e:
+                st.error(f"오류: 워드클라우드 생성 중 오류 발생: {e}")
+                st.error(e)
+                return None
+
+    else:
+        st.warning("\n워드클라우드를 생성할 텍스트 데이터가 없습니다 (필터링된 데이터 없음).")
 
 
 # --- UI 요소 ---
@@ -157,6 +195,12 @@ with col2:
 # 파일 경로 설정
 file_path = './tokenized_articles.csv'
 
+# 시각화 선택 라디오 버튼
+visualization_option = st.radio(
+    "RESULT: ",
+    ('LDA', 'wordCloud')
+)
+
 # 분석 실행 버튼
 if st.button("분석 실행"):
     st.write("분석을 시작합니다...")
@@ -165,25 +209,27 @@ if st.button("분석 실행"):
     filtered_df = load_and_filter_data(file_path, start_date, end_date)
 
     if filtered_df is not None:
-        # 단어 사전 및 BoW 코퍼스 생성
-        dictionary, corpus = create_dictionary_and_corpus(filtered_df)
+        if visualization_option == 'LDA':
+            # 단어 사전 및 BoW 코퍼스 생성
+            dictionary, corpus = create_dictionary_and_corpus(filtered_df)
 
-        if dictionary is not None and corpus is not None:
-            # LDA 모델 학습 및 최적 토픽 수 결정
-            lda_model = train_lda_model(corpus, dictionary, filtered_df)
+            if dictionary is not None and corpus is not None:
+                # LDA 모델 학습 및 최적 토픽 수 결정
+                lda_model = train_lda_model(corpus, dictionary, filtered_df)
 
-            if lda_model is not None:
-                st.write("LDA 모델 학습 완료!")
+                if lda_model is not None:
+                    try:
+                        with st.spinner("pyLDAvis 시각화 준비 중..."):
+                            vis = gensimvis.prepare(lda_model[1], corpus, dictionary) # lda_model 튜플의 두 번째 요소가 모델
+                            st.success("pyLDAvis 시각화")
+                        pyldavis_html = pyLDAvis.prepared_data_to_html(vis)
+                        st.components.v1.html(pyldavis_html, width=None, height=800, scrolling=True) 
 
-                # pyLDAvis 시각화
-                try:
-                    with st.spinner("pyLDAvis 시각화 준비 중..."):
-                        vis = gensimvis.prepare(lda_model[1], corpus, dictionary) # lda_model 튜플의 두 번째 요소가 모델
-                        st.success("pyLDAvis 시각화")
-                    pyldavis_html = pyLDAvis.prepared_data_to_html(vis)
-                    st.components.v1.html(pyldavis_html, width=None, height=800, scrolling=True) 
+                    except Exception as e:
+                        st.error(f"오류: pyLDAvis 시각화 중 오류 발생: {e}")
+                        st.error("pyLDAvis 시각화가 제대로 표시되지 않을 수 있습니다. (Colab 환경)")
+        elif visualization_option == 'wordCloud':
+            st.write("WordCloud")
+            generate_wordcloud(filtered_df, start_date, end_date)
 
-                except Exception as e:
-                    st.error(f"오류: pyLDAvis 시각화 중 오류 발생: {e}")
-                    st.error("pyLDAvis 시각화가 제대로 표시되지 않을 수 있습니다. (Colab 환경)")
 
