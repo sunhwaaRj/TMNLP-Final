@@ -6,3 +6,4 @@ gensim
 pyLDAvis
 konlpy
 IPython
+matplotlib
