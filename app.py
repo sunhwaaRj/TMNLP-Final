@@ -82,30 +82,31 @@ def create_dictionary_and_corpus(filtered_df):
         st.error(f"오류: 단어 사전 및 BoW 코퍼스 생성 중 오류 발생: {e}")
         return None, None
 
+# LDA 모델 학습 함수
+def build_lda_model(corpus, dictionary, num_topics, passes=15, random_state=42):
+    return gs.models.ldamodel.LdaModel(
+        corpus=corpus,
+        id2word=dictionary,
+        num_topics=num_topics,
+        passes=passes,
+        random_state=random_state
+    )
+
 # LDA 모델 학습 및 최적 토픽 수 결정 함수
 def train_lda_model(corpus, dictionary, filtered_df):
-    topic_range = range(2, 10)  # 토픽 개수 범위를 2~9로 고정
+    topic_range = range(2, 10)
     try:
         with st.spinner("최적 토픽 개수 탐색 및 LDA 모델 학습 중..."):
             coherence_scores = []
-            num_topics_list = list(topic_range) # 리스트로 변환하여 인덱스 접근 가능하도록 함
+            num_topics_list = list(topic_range)
 
-            # 진행률 표시바 초기화
             progress_bar = st.progress(0)
             progress_text = "응집도 계산 진행 중..."
-            status_text = st.empty() # 상태 메시지를 표시할 빈 공간 확보
+            status_text = st.empty()
 
             for i, num_topics in enumerate(num_topics_list):
-                # LDA 모델 학습
-                lda_model = gs.models.ldamodel.LdaModel(
-                    corpus=corpus,
-                    id2word=dictionary,
-                    num_topics=num_topics,
-                    passes=15,
-                    random_state=42
-                )
+                lda_model = build_lda_model(corpus, dictionary, num_topics)
 
-                # 응집도 계산
                 coherence_model = CoherenceModel(
                     model=lda_model,
                     texts=filtered_df['tokens'],
@@ -115,46 +116,34 @@ def train_lda_model(corpus, dictionary, filtered_df):
                 coherence_lda = coherence_model.get_coherence()
                 coherence_scores.append(coherence_lda)
 
-                # 진행률 표시바 업데이트
                 progress_value = (i + 1) / len(num_topics_list)
                 progress_bar.progress(progress_value, text=f"{progress_text} ({progress_value*100:.1f}%)")
 
-            # 최적 토픽 개수 결정
             if coherence_scores:
                 max_coherence = max(coherence_scores)
                 optimal_topic_index = coherence_scores.index(max_coherence)
                 best_topic_num = num_topics_list[optimal_topic_index]
 
-                st.success(f"최적 토픽 수: {best_topic_num} (응집도: {max_coherence:.4f})") # 응집도 값도 함께 표시
-
+                st.success(f"최적 토픽 수: {best_topic_num} (응집도: {max_coherence:.4f})")
             else:
                 st.warning("응집도 점수를 계산할 수 없습니다.")
                 return None, None
 
-            # 최종 LDA 모델 학습 (최적 토픽 개수로)
-            final_lda_model = gs.models.ldamodel.LdaModel(
-                corpus=corpus,
-                id2word=dictionary,
-                num_topics=best_topic_num, # 최적 토픽 개수 사용
-                passes=15, # passes 값 조정 가능
-                random_state=42
-            )
-            return best_topic_num, final_lda_model # 학습된 최종 모델 반환
+            final_lda_model = build_lda_model(corpus, dictionary, best_topic_num)
+            return best_topic_num, final_lda_model
 
     except Exception as e:
         st.error(f"오류: LDA 모델 학습 중 오류 발생: {e}")
-        st.error(e) # 상세 오류 메시지 표시
         return None, None
+
 
 def generate_wordcloud(filtered_df, start_date, end_date):
     if not filtered_df.empty and 'tokens' in filtered_df.columns:
         with st.spinner("워드클라우드 생성 중..."):
             try:
                 all_tokens = [token for tokens_list in filtered_df['tokens'].dropna().tolist() for token in tokens_list]
-
                 text_for_wordcloud = ' '.join(all_tokens)
                 font_path = './NanumBarunGothic.ttf'
-
                 wordcloud = WordCloud(
                     font_path=font_path,
                     width=800, height=400, 
@@ -162,25 +151,21 @@ def generate_wordcloud(filtered_df, start_date, end_date):
                     max_words=100, 
                     colormap='viridis'
                 )
-
                 wordcloud.generate(text_for_wordcloud)
-
-                st.success("워드클라우드 생성 완료!")
-
                 fig, ax = plt.subplots(figsize=(10, 5))
                 ax.imshow(wordcloud, interpolation='bilinear')
                 ax.axis('off')
-                ax.set_title(f"'{start_date.strftime('%Y.%m.%d')}' ~ '{end_date.strftime('%Y.%m.%d')}' 기간 워드클라우드", fontsize=14) # 날짜 변수 사용
-                st.pyplot(fig)
+                ax.set_title(f"'{start_date.strftime('%Y.%m.%d')}' ~ '{end_date.strftime('%Y.%m.%d')}'", fontsize=14)
                 plt.close(fig)
-
+                return fig
+            
             except Exception as e:
                 st.error(f"오류: 워드클라우드 생성 중 오류 발생: {e}")
                 st.error(e)
                 return None
-
     else:
         st.warning("\n워드클라우드를 생성할 텍스트 데이터가 없습니다 (필터링된 데이터 없음).")
+        return None
 
 
 # --- UI 요소 ---
@@ -195,41 +180,47 @@ with col2:
 # 파일 경로 설정
 file_path = './tokenized_articles.csv'
 
+if 'lda_vis_html' not in st.session_state:
+    st.session_state.lda_vis_html = None
+if 'wordcloud_fig' not in st.session_state:
+    st.session_state.wordcloud_fig = None
+    
 # 시각화 선택 라디오 버튼
 visualization_option = st.radio(
     "RESULT: ",
     ('LDA', 'wordCloud')
 )
-
-# 분석 실행 버튼
+    
 if st.button("분석 실행"):
-    st.write("분석을 시작합니다...")
-
-    # 데이터 로딩 및 필터링
     filtered_df = load_and_filter_data(file_path, start_date, end_date)
 
     if filtered_df is not None:
-        if visualization_option == 'LDA':
-            # 단어 사전 및 BoW 코퍼스 생성
-            dictionary, corpus = create_dictionary_and_corpus(filtered_df)
+        dictionary, corpus = create_dictionary_and_corpus(filtered_df)
 
-            if dictionary is not None and corpus is not None:
-                # LDA 모델 학습 및 최적 토픽 수 결정
-                lda_model = train_lda_model(corpus, dictionary, filtered_df)
+        st.session_state.lda_vis_html = None
+        if dictionary is not None and corpus is not None:
+            lda_model = train_lda_model(corpus, dictionary, filtered_df)
+            if lda_model is not None:
+                try:
+                    with st.spinner("pyLDAvis 시각화 준비 중..."):
+                        vis = gensimvis.prepare(lda_model[1], corpus, dictionary)
+                        st.session_state.lda_vis_html = pyLDAvis.prepared_data_to_html(vis)
+                except Exception as e:
+                    st.error(f"오류: pyLDAvis 시각화 중 오류 발생: {e}")
+                    st.session_state.lda_vis_html = None
 
-                if lda_model is not None:
-                    try:
-                        with st.spinner("pyLDAvis 시각화 준비 중..."):
-                            vis = gensimvis.prepare(lda_model[1], corpus, dictionary) # lda_model 튜플의 두 번째 요소가 모델
-                            st.success("pyLDAvis 시각화")
-                        pyldavis_html = pyLDAvis.prepared_data_to_html(vis)
-                        st.components.v1.html(pyldavis_html, width=None, height=800, scrolling=True) 
+        st.session_state.wordcloud_fig = None
+        if not filtered_df.empty and 'tokens' in filtered_df.columns:
+            st.session_state.wordcloud_fig = generate_wordcloud(filtered_df, start_date, end_date)
 
-                    except Exception as e:
-                        st.error(f"오류: pyLDAvis 시각화 중 오류 발생: {e}")
-                        st.error("pyLDAvis 시각화가 제대로 표시되지 않을 수 있습니다. (Colab 환경)")
-        elif visualization_option == 'wordCloud':
-            st.write("WordCloud")
-            generate_wordcloud(filtered_df, start_date, end_date)
-
-
+# 결과만 번갈아 보여주기
+if visualization_option == 'LDA':
+    if st.session_state.lda_vis_html:
+        st.components.v1.html(st.session_state.lda_vis_html, width=None, height=800, scrolling=True)
+    else:
+        st.info("LDA 결과가 없습니다. 먼저 분석을 실행하세요.")
+elif visualization_option == 'wordCloud':
+    if st.session_state.wordcloud_fig:
+        st.pyplot(st.session_state.wordcloud_fig)
+    else:
+        st.info("워드클라우드 결과가 없습니다. 먼저 분석을 실행하세요.")
