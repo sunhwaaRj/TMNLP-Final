@@ -24,6 +24,18 @@ import pyLDAvis.gensim_models as gensimvis
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 
+import openai
+import os
+from dotenv import load_dotenv
+
+# 환경변수 로딩
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+from openai import OpenAI
+client = OpenAI()
+
+
 # Streamlit 페이지 기본 설정
 st.set_page_config(
     page_title="LDA 토픽 모델링 시각화",
@@ -167,6 +179,37 @@ def generate_wordcloud(filtered_df, start_date, end_date):
         st.warning("\n워드클라우드를 생성할 텍스트 데이터가 없습니다 (필터링된 데이터 없음).")
         return None
 
+# GPT 요약 함수
+def summarize_topics_with_gpt(_lda_model, topn=10, model_name="gpt-4o"):
+    try:
+        summaries = []
+
+        for topic_id in range(_lda_model.num_topics):
+            top_words = _lda_model.show_topic(topic_id, topn=topn)
+            keyword_list = [word for word, _ in top_words]
+            prompt = (
+                f"다음은 경제 기사 분석 결과에서 추출된 토픽 키워드입니다:\n"
+                f"{', '.join(keyword_list)}\n\n"
+                "이 키워드를 기반으로 해당 토픽을 간결하고 직관적인 문장으로 설명해 주세요."
+            )
+
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "당신은 경제 기사 분석 전문가입니다."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=100,
+                temperature=0.7
+            )
+            summary = response.choices[0].message.content.strip()
+            summaries.append((topic_id, summary))
+
+        return summaries
+
+    except Exception as e:
+        st.error(f"GPT 요약 중 오류 발생: {e}")
+        return []
 
 # --- UI 요소 ---
 st.header("분석 기간 설정 (2025년 2월~4월 분석만 가능합니다.)") # 사이드바 -> 메인 화면
@@ -184,11 +227,13 @@ if 'lda_vis_html' not in st.session_state:
     st.session_state.lda_vis_html = None
 if 'wordcloud_fig' not in st.session_state:
     st.session_state.wordcloud_fig = None
+if 'topic_summaries' not in st.session_state:
+    st.session_state.topic_summaries = None
     
 # 시각화 선택 라디오 버튼
 visualization_option = st.radio(
     "RESULT: ",
-    ('LDA', 'wordCloud')
+    ('LDA', 'wordCloud', 'summary')
 )
     
 if st.button("분석 실행"):
@@ -208,10 +253,20 @@ if st.button("분석 실행"):
                 except Exception as e:
                     st.error(f"오류: pyLDAvis 시각화 중 오류 발생: {e}")
                     st.session_state.lda_vis_html = None
+                    
+            # GPT 요약 실행
+            st.info("GPT 요약 생성 중...")
+            topic_summaries = summarize_topics_with_gpt(lda_model[1])
+            st.session_state.topic_summaries = topic_summaries
+            st.success("GPT 요약 완료")
 
+         # 워드클라우드 생성
         st.session_state.wordcloud_fig = None
         if not filtered_df.empty and 'tokens' in filtered_df.columns:
+            st.info("워드클라우드 생성 중...")
             st.session_state.wordcloud_fig = generate_wordcloud(filtered_df, start_date, end_date)
+            if st.session_state.wordcloud_fig:
+                st.success("워드클라우드 생성 완료!")
 
 # 결과만 번갈아 보여주기
 if visualization_option == 'LDA':
@@ -224,3 +279,11 @@ elif visualization_option == 'wordCloud':
         st.pyplot(st.session_state.wordcloud_fig)
     else:
         st.info("워드클라우드 결과가 없습니다. 먼저 분석을 실행하세요.")
+elif visualization_option == 'summary':
+    if st.session_state.topic_summaries:
+        st.subheader("GPT 기반 토픽 요약")
+        for topic_id, summary in st.session_state.topic_summaries:
+            st.markdown(f"**토픽 {topic_id + 1}**: {summary}")
+    else:
+        st.info("요약 결과가 없습니다. 먼저 분석을 실행하세요.")
+        
